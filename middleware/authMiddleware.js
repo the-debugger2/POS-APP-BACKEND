@@ -33,95 +33,28 @@ exports.protect = async(req, res, next) => {
             });
 
         }
-        console.log("TOKEN:", token);
-        // Verify JWT
-        const decoded = jwt.verify(
-            token,
-            process.env.JWT_SECRET
-        );
+        const decoded = jwt.verify(token, process.env.JWT_SECRET);
 
-        // Find Session
-        const session = await Session.findOne({
-            token,
-            revoked: false
-        });
-
-        // Session Not Found
+        const session = await Session.findOne({ token, revoked: false });
         if (!session) {
-
-            return res.status(401).json({
-                message: "Session invalid. Please login again."
-            });
-
+            return res.status(401).json({ message: "Session invalid. Please login again." });
+        }
+        if (new Date() > new Date(session.expiresAt)) {
+            return res.status(401).json({ message: "Session expired. Please login again." });
         }
 
-        // Session Expired
-        if (
-            new Date() >
-            new Date(session.expiresAt)
-        ) {
+        const user = await User.findById(decoded.userId).select("-password");
+        if (!user) return res.status(401).json({ message: "User not found" });
+        if (!user.isActive) return res.status(403).json({ message: "Account disabled" });
+        if (user.subscriptionStatus !== "active")
+            return res.status(403).json({ message: "Subscription inactive" });
+        if (new Date() > new Date(user.subscriptionExpiry))
+            return res.status(403).json({ message: "Subscription expired" });
 
-            return res.status(401).json({
-                message: "Session expired. Please login again."
-            });
-
-        }
-
-        // Find User
-        const user = await User.findById(
-            decoded.id
-        ).select("-password");
-
-        // User Missing
-        if (!user) {
-
-            return res.status(401).json({
-                message: "User not found"
-            });
-
-        }
-
-        // Account Disabled
-        if (!user.isActive) {
-
-            return res.status(403).json({
-                message: "Account disabled"
-            });
-
-        }
-
-        // Subscription Check
-        if (
-            user.subscriptionStatus !== "active"
-        ) {
-
-            return res.status(403).json({
-                message: "Subscription inactive"
-            });
-
-        }
-
-        // Subscription Expiry Check
-        if (
-            new Date() >
-            new Date(user.subscriptionExpiry)
-        ) {
-
-            return res.status(403).json({
-                message: "Subscription expired"
-            });
-
-        }
-
-        // Attach User
         req.user = user;
-
         req.token = token;
-
         req.session = session;
-
         next();
-
     } catch (error) {
 
         console.log(error);

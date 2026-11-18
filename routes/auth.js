@@ -1,6 +1,7 @@
 const router = require('express').Router()
 const jwt = require('jsonwebtoken')
 const User = require('../models/User')
+const Session = require('../models/session')
 const bcrypt = require('bcryptjs')
 
 router.post('/login', async(req, res) => {
@@ -27,6 +28,12 @@ router.post('/login', async(req, res) => {
         const token = jwt.sign({ userId: user._id, businessId: user._id },
             process.env.JWT_SECRET, { expiresIn: '24h' }
         )
+        await Session.create({
+            user: user._id,
+            token,
+            revoked: false,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        })
 
         res.json({
             token,
